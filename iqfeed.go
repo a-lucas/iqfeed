@@ -6,8 +6,8 @@ import (
 	"io"
 	"log"
 	"net"
-	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -27,6 +27,13 @@ type IQC struct {
 	Conn         net.Conn
 	Quit         chan bool
 	DynFields    map[int]string
+	requestId string
+	previousRequestId int64
+}
+
+func (c *IQC) incr() string{
+	c.requestId = fmt.Sprintf("%d", atomic.AddInt64(&c.previousRequestId, 1))
+	return c.requestId
 }
 
 func (c *IQC) connect(cs string) {
@@ -73,7 +80,7 @@ func (c *IQC) processSysMsg(d []byte) {
 }
 
 // ProcessSumMsg handles summary messages, field definitions are available here: http://www.iqfeed.net/dev/api/docs/Level1UpdateSummaryMessage.cfm.
-func (c *IQC) processSumMsg(d []byte) {
+func (c *IQC) processSummaryMsg(d []byte) {
 	s := &UpdSummaryMsg{}
 	items := strings.Split(string(d), ",")
 	s.UnMarshall(items, c.DynFields, c.TimeLoc)
@@ -146,7 +153,7 @@ func (c *IQC) processReceiver(d []byte) {
 	case 0x53: // Start letter is S, indicating System message (Unicode representation in integer value).
 		c.processSysMsg(data)
 	case 0x50: // Start letter is P, indicating a summary message.
-		c.processSumMsg(data)
+		c.processSummaryMsg(data)
 	case 0x51: // Start letter is Q, indicating an update message.
 		c.processUpdMsg(data)
 	case 0x54: // Start letter is T, indicating Time message.
@@ -176,6 +183,7 @@ func (c *IQC) read() {
 			break
 		default:
 			line, isPrefix, err := r.ReadLine()
+
 			for err == nil && !isPrefix {
 				if c.CreateBackup {
 					bld := fmt.Sprintf("%s\r\n", string(line))
@@ -191,7 +199,7 @@ func (c *IQC) read() {
 			if err != io.EOF {
 				log.Println("Pipe closed exiting...")
 				c.Conn.Close()
-				os.Exit(0)
+				return
 			}
 		}
 	}
@@ -259,18 +267,19 @@ func (c *IQC) getPutChar(t time.Time) string {
 }
 
 // Start function will start the concurrent functions to read and write data to the and from the network stream.
-func (c *IQC) Start(connectString string) *IQC {
+func (c *IQC) Start(connectString string, bufferSize int) *IQC {
 	c.connect(connectString)
-	c.System = make(chan *SystemMessage)
-	c.News = make(chan *NewsMsg)
-	c.Errors = make(chan *ErrorMsg)
-	c.Fundamental = make(chan *FundamentalMsg)
-	c.Regional = make(chan *RegionalMsg)
-	c.Time = make(chan *TimeMsg)
-	c.Updates = make(chan *UpdSummaryMsg)
+	c.System = make(chan *SystemMessage, bufferSize)
+	c.News = make(chan *NewsMsg, bufferSize)
+	c.Errors = make(chan *ErrorMsg, bufferSize)
+	c.Fundamental = make(chan *FundamentalMsg, bufferSize)
+	c.Regional = make(chan *RegionalMsg, bufferSize)
+	c.Time = make(chan *TimeMsg, bufferSize)
+	c.Updates = make(chan *UpdSummaryMsg, bufferSize)
 	go c.read()
+	
 	c.ReqCurrentUpdateFNames()
-	c.RequestListedMarkets()
+	//c.RequestListedMarkets()
 	return c
 
 }

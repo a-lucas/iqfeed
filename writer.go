@@ -96,7 +96,7 @@ func (c *IQC) DisableTSUpdates() {
 
 // EnableTSUpdates Timestamps default to on, but in the event you have stopped them manually, this will restart them into the stream.
 func (c *IQC) EnableTSUpdates() {
-	c.Write("S,TIMESTAMPSON\r\n")
+	c.Write(fmt.Sprintf("S,TIMESTAMPSON,%s\r\n", c.incr()))
 }
 
 // RegionWatch Begins watching a symbol for Level 1 Regional updates.
@@ -111,7 +111,7 @@ func (c *IQC) RegionWatchOff(symbol string) {
 
 // NewsOn Turns on streaming news headlines.
 func (c *IQC) NewsOn() {
-	c.Write("S,NEWSON\r\n")
+	c.Write(fmt.Sprintf("S,NEWSON\r\n"))
 }
 
 // NewsOff Turns off streaming news headlines.
@@ -121,7 +121,7 @@ func (c *IQC) NewsOff() {
 
 // RequestStats Request a S,STATS message to give you information about the feed status.
 func (c *IQC) RequestStats() {
-	c.Write("S,REQUEST STATS\r\n")
+	c.Write(fmt.Sprintf("S,REQUEST STATS\r\n"))
 }
 
 // ReqFundamentalFNames Request a list of all available fundamental message field names.
@@ -145,9 +145,14 @@ func (c *IQC) SelectUpdateFields(fields ...string) {
 	c.Write("S,SELECT UPDATE FIELDS," + strings.Join(fields, ",") + "\r\n")
 }
 
+
+func (c *IQC) SearchSymbol(symbol string) {
+	c.Write(fmt.Sprintf("SBF,s,%s,e,%s,%s\r\n",symbol,"1 5 6 7",c.incr()))
+}
+
 // RequestListedMarkets will request a list of all the listed markets from the feed.
 func (c *IQC) RequestListedMarkets() {
-	c.Write("SLM\r\n")
+	c.Write(fmt.Sprintf("SLM,%s\r\n", c.incr()))
 }
 
 // SetLogLevels Change the logging levels for IQFeed. Level Docs: http://www.iqfeed.net/dev/api/docs/IQConnectLogging.cfm.
